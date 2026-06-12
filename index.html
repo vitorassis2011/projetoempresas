@@ -1,309 +1,147 @@
+import pygame
+import sys
+import json
 
-import sqlite3
-import datetime
-from tabulate import tabulate
+pygame.init()
 
-# Conexão com o banco de dados
-conn = sqlite3.connect('bike_shop.db')
-cursor = conn.cursor()
+# Configurações da tela
+WIDTH, HEIGHT = 800, 400
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Football Legends Clone")
 
-# ===================== CRIAÇÃO DAS TABELAS =====================
-def criar_tabelas():
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS clientes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cpf TEXT UNIQUE NOT NULL,
-        nome TEXT NOT NULL,
-        telefone TEXT,
-        cep TEXT,
-        data_cadastro TEXT
-    )
-    ''')
+# Cores
+WHITE = (255, 255, 255)
+GREEN = (0, 200, 0)
+RED = (200, 0, 0)
+BLUE = (0, 0, 200)
+BLACK = (0, 0, 0)
 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS chefes_vendedores (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cpf TEXT UNIQUE NOT NULL,
-        nome TEXT NOT NULL,
-        telefone TEXT,
-        cep TEXT,
-        data_contratacao TEXT,
-        salario REAL
-    )
-    ''')
+# Jogadores
+player_size = 40
+player1 = pygame.Rect(100, HEIGHT-60, player_size, player_size)
+player2 = pygame.Rect(650, HEIGHT-60, player_size, player_size)
 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS bicicletas (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        marca TEXT NOT NULL,
-        estilo TEXT NOT NULL,           -- Ex: Mountain Bike, Road, Infantil, etc.
-        aro INTEGER CHECK (aro IN (20, 24, 26, 29)),
-        cor TEXT NOT NULL,
-        preco REAL NOT NULL,
-        quantidade_estoque INTEGER DEFAULT 0,
-        codigo_estoque TEXT UNIQUE,     -- Numeração/código interno
-        data_cadastro TEXT
-    )
-    ''')
+# Bola
+ball = pygame.Rect(WIDTH//2, HEIGHT//2, 20, 20)
+ball_speed = [3, 3]
 
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS vendas (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        cliente_id INTEGER,
-        bicicleta_id INTEGER,
-        chefe_vendedor_id INTEGER,
-        quantidade INTEGER,
-        valor_total REAL,
-        data_venda TEXT,
-        FOREIGN KEY (cliente_id) REFERENCES clientes(id),
-        FOREIGN KEY (bicicleta_id) REFERENCES bicicletas(id),
-        FOREIGN KEY (chefe_vendedor_id) REFERENCES chefes_vendedores(id)
-    )
-    ''')
-    conn.commit()
+# Velocidade dos jogadores
+speed = 5
+jump_height = 10
+gravity = 1
+p1_y_vel = 0
+p2_y_vel = 0
 
-# ===================== FUNÇÕES AUXILIARES =====================
-def validar_cpf(cpf):
-    return len(cpf) == 11 and cpf.isdigit()
+# Placar
+score1 = 0
+score2 = 0
+max_goals = 15
 
-def menu_principal():
-    while True:
-        print("\n" + "="*60)
-        print("          SISTEMA DE GERENCIAMENTO - BIKE STORE")
-        print("="*60)
-        print("1. Cadastro de Cliente")
-        print("2. Cadastro de Chefe de Vendedores")
-        print("3. Cadastro / Estoque de Bicicletas")
-        print("4. Realizar Venda")
-        print("5. Consultar Estoque")
-        print("6. Listar Clientes")
-        print("7. Listar Chefes de Vendedores")
-        print("8. Relatórios")
-        print("0. Sair")
-        print("="*60)
-        
-        opcao = input("Escolha uma opção: ").strip()
-        
-        if opcao == '1':
-            cadastrar_cliente()
-        elif opcao == '2':
-            cadastrar_chefe_vendedor()
-        elif opcao == '3':
-            gerenciar_bicicletas()
-        elif opcao == '4':
-            realizar_venda()
-        elif opcao == '5':
-            consultar_estoque()
-        elif opcao == '6':
-            listar_clientes()
-        elif opcao == '7':
-            listar_chefes()
-        elif opcao == '8':
-            relatorios()
-        elif opcao == '0':
-            print("Saindo do sistema...")
-            conn.close()
-            break
-        else:
-            print("Opção inválida!")
+# Fontes
+font = pygame.font.SysFont(None, 40)
 
-# ===================== CADASTROS =====================
-def cadastrar_cliente():
-    print("\n--- Cadastro de Cliente ---")
-    cpf = input("CPF (11 dígitos): ").strip()
-    if not validar_cpf(cpf):
-        print("CPF inválido!")
-        return
-    
-    nome = input("Nome completo: ").strip()
-    telefone = input("Telefone: ").strip()
-    cep = input("CEP: ").strip()
-    data = datetime.date.today().isoformat()
-    
+# Ranking
+ranking_file = "ranking.json"
+
+def carregar_ranking():
     try:
-        cursor.execute('''
-            INSERT INTO clientes (cpf, nome, telefone, cep, data_cadastro)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (cpf, nome, telefone, cep, data))
-        conn.commit()
-        print("Cliente cadastrado com sucesso!")
-    except sqlite3.IntegrityError:
-        print("Erro: CPF já cadastrado!")
+        with open(ranking_file, "r") as f:
+            return json.load(f)
+    except:
+        return {}
 
-def cadastrar_chefe_vendedor():
-    print("\n--- Cadastro de Chefe de Vendedores ---")
-    cpf = input("CPF (11 dígitos): ").strip()
-    if not validar_cpf(cpf):
-        print("CPF inválido!")
-        return
-    
-    nome = input("Nome completo: ").strip()
-    telefone = input("Telefone: ").strip()
-    cep = input("CEP: ").strip()
-    salario = float(input("Salário: R$ ").replace(',', '.'))
-    data = datetime.date.today().isoformat()
-    
-    try:
-        cursor.execute('''
-            INSERT INTO chefes_vendedores (cpf, nome, telefone, cep, data_contratacao, salario)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (cpf, nome, telefone, cep, data, salario))
-        conn.commit()
-        print("Chefe de Vendedores cadastrado com sucesso!")
-    except sqlite3.IntegrityError:
-        print("Erro: CPF já cadastrado!")
+def salvar_ranking(ranking):
+    with open(ranking_file, "w") as f:
+        json.dump(ranking, f)
 
-def gerenciar_bicicletas():
-    while True:
-        print("\n--- Gerenciamento de Bicicletas ---")
-        print("1. Cadastrar Nova Bicicleta")
-        print("2. Adicionar Estoque")
-        print("3. Voltar")
-        
-        op = input("Escolha: ")
-        if op == '1':
-            cadastrar_bicicleta()
-        elif op == '2':
-            adicionar_estoque()
-        elif op == '3':
-            break
+# Login simples
+def login():
+    print("=== LOGIN ===")
+    nome = input("Digite seu nome: ")
+    senha = input("Digite sua senha: ")
+    return nome, senha
 
-def cadastrar_bicicleta():
-    print("\n--- Cadastro de Bicicleta ---")
-    marca = input("Marca: ").strip()
-    estilo = input("Estilo (Mountain, Road, Infantil...): ").strip()
-    
-    while True:
-        try:
-            aro = int(input("Aro (20, 24, 26, 29): "))
-            if aro not in [20, 24, 26, 29]:
-                print("Aro inválido!")
-                continue
-            break
-        except:
-            print("Digite um número válido!")
-    
-    cor = input("Cor: ").strip()
-    preco = float(input("Preço (R$): ").replace(',', '.'))
-    quantidade = int(input("Quantidade inicial em estoque: "))
-    codigo_estoque = input("Código único de estoque (ex: MTB-RED-29-001): ").strip()
-    data = datetime.date.today().isoformat()
-    
-    try:
-        cursor.execute('''
-            INSERT INTO bicicletas 
-            (marca, estilo, aro, cor, preco, quantidade_estoque, codigo_estoque, data_cadastro)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (marca, estilo, aro, cor, preco, quantidade, codigo_estoque, data))
-        conn.commit()
-        print("Bicicleta cadastrada com sucesso!")
-    except sqlite3.IntegrityError:
-        print("Erro: Código de estoque já existe!")
+# Loop principal
+clock = pygame.time.Clock()
+ranking = carregar_ranking()
+nome1, senha1 = login()
+nome2, senha2 = login()
 
-def adicionar_estoque():
-    codigo = input("\nDigite o código de estoque da bicicleta: ").strip()
-    qtd = int(input("Quantidade a adicionar: "))
-    
-    cursor.execute("UPDATE bicicletas SET quantidade_estoque = quantidade_estoque + ? WHERE codigo_estoque = ?", 
-                   (qtd, codigo))
-    if cursor.rowcount > 0:
-        conn.commit()
-        print("Estoque atualizado!")
-    else:
-        print("Bicicleta não encontrada!")
+while True:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
 
-# ===================== VENDAS =====================
-def realizar_venda():
-    print("\n--- Realizar Venda ---")
-    
-    # Listar chefes
-    cursor.execute("SELECT id, nome FROM chefes_vendedores")
-    chefes = cursor.fetchall()
-    if not chefes:
-        print("Nenhum chefe de vendas cadastrado!")
-        return
-    print("Chefes disponíveis:")
-    for c in chefes:
-        print(f"{c[0]} - {c[1]}")
-    chefe_id = int(input("ID do Chefe: "))
-    
-    # Listar clientes
-    cursor.execute("SELECT id, nome FROM clientes")
-    clientes = cursor.fetchall()
-    if not clientes:
-        print("Nenhum cliente cadastrado!")
-        return
-    print("\nClientes:")
-    for cli in clientes:
-        print(f"{cli[0]} - {cli[1]}")
-    cliente_id = int(input("ID do Cliente: "))
-    
-    # Listar bicicletas em estoque
-    cursor.execute("SELECT id, marca, estilo, aro, cor, preco, quantidade_estoque, codigo_estoque FROM bicicletas WHERE quantidade_estoque > 0")
-    bikes = cursor.fetchall()
-    if not bikes:
-        print("Sem bicicletas em estoque!")
-        return
-    
-    print("\nBicicletas em estoque:")
-    headers = ["ID", "Marca", "Estilo", "Aro", "Cor", "Preço", "Estoque", "Código"]
-    print(tabulate(bikes, headers=headers, tablefmt="grid"))
-    
-    bike_id = int(input("ID da Bicicleta: "))
-    qtd = int(input("Quantidade: "))
-    
-    # Verificar estoque
-    cursor.execute("SELECT quantidade_estoque, preco FROM bicicletas WHERE id = ?", (bike_id,))
-    resultado = cursor.fetchone()
-    if not resultado or resultado[0] < qtd:
-        print("Estoque insuficiente!")
-        return
-    
-    valor_total = resultado[1] * qtd
-    data = datetime.date.today().isoformat()
-    
-    cursor.execute('''
-        INSERT INTO vendas (cliente_id, bicicleta_id, chefe_vendedor_id, quantidade, valor_total, data_venda)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (cliente_id, bike_id, chefe_id, qtd, valor_total, data))
-    
-    cursor.execute("UPDATE bicicletas SET quantidade_estoque = quantidade_estoque - ? WHERE id = ?", (qtd, bike_id))
-    conn.commit()
-    print(f"Venda realizada com sucesso! Total: R$ {valor_total:.2f}")
+    keys = pygame.key.get_pressed()
 
-# ===================== CONSULTAS =====================
-def consultar_estoque():
-    cursor.execute('''
-        SELECT marca, estilo, aro, cor, preco, quantidade_estoque, codigo_estoque 
-        FROM bicicletas 
-        ORDER BY marca, estilo
-    ''')
-    estoque = cursor.fetchall()
-    print("\n" + tabulate(estoque, headers=["Marca", "Estilo", "Aro", "Cor", "Preço", "Qtd", "Código"], tablefmt="grid"))
+    # Controles Jogador 1
+    if keys[pygame.K_a]:
+        player1.x -= speed
+    if keys[pygame.K_d]:
+        player1.x += speed
+    if keys[pygame.K_w] and player1.bottom >= HEIGHT:
+        p1_y_vel = -jump_height
+    if keys[pygame.K_s] and player1.colliderect(ball):
+        ball_speed[0] = -ball_speed[0]
 
-def listar_clientes():
-    cursor.execute("SELECT * FROM clientes")
-    clientes = cursor.fetchall()
-    print("\n" + tabulate(clientes, headers=["ID", "CPF", "Nome", "Telefone", "CEP", "Data"], tablefmt="grid"))
+    # Controles Jogador 2
+    if keys[pygame.K_LEFT]:
+        player2.x -= speed
+    if keys[pygame.K_RIGHT]:
+        player2.x += speed
+    if keys[pygame.K_UP] and player2.bottom >= HEIGHT:
+        p2_y_vel = -jump_height
+    if keys[pygame.K_k] and player2.colliderect(ball):
+        ball_speed[0] = -ball_speed[0]
 
-def listar_chefes():
-    cursor.execute("SELECT * FROM chefes_vendedores")
-    chefes = cursor.fetchall()
-    print("\n" + tabulate(chefes, headers=["ID", "CPF", "Nome", "Telefone", "CEP", "Contratação", "Salário"], tablefmt="grid"))
+    # Física dos jogadores
+    p1_y_vel += gravity
+    player1.y += p1_y_vel
+    if player1.bottom >= HEIGHT:
+        player1.bottom = HEIGHT
+        p1_y_vel = 0
 
-def relatorios():
-    print("\n--- Relatórios ---")
-    print("1. Total de Vendas por Período")
-    print("2. Bicicletas mais Vendidas")
-    op = input("Escolha: ")
-    
-    if op == '1':
-        cursor.execute("SELECT SUM(valor_total) as total FROM vendas")
-        total = cursor.fetchone()[0] or 0
-        print(f"Total de vendas registrado: R$ {total:.2f}")
+    p2_y_vel += gravity
+    player2.y += p2_y_vel
+    if player2.bottom >= HEIGHT:
+        player2.bottom = HEIGHT
+        p2_y_vel = 0
 
-# ===================== INICIALIZAÇÃO =====================
-if __name__ == "__main__":
-    criar_tabelas()
-    print("Sistema de Bike Store inicializado com sucesso!")
-    menu_principal()
+    # Movimento da bola
+    ball.x += ball_speed[0]
+    ball.y += ball_speed[1]
+
+    # Colisão com paredes
+    if ball.top <= 0 or ball.bottom >= HEIGHT:
+        ball_speed[1] = -ball_speed[1]
+
+    # Gols
+    if ball.left <= 0:  # Gol jogador 2
+        score2 += 1
+        ball.center = (WIDTH//2, HEIGHT//2)
+    if ball.right >= WIDTH:  # Gol jogador 1
+        score1 += 1
+        ball.center = (WIDTH//2, HEIGHT//2)
+
+    # Fim de jogo
+    if score1 >= max_goals or score2 >= max_goals:
+        vencedor = nome1 if score1 > score2 else nome2
+        print(f"Fim de jogo! Vencedor: {vencedor}")
+        ranking[vencedor] = ranking.get(vencedor, 0) + 1
+        salvar_ranking(ranking)
+        pygame.quit()
+        sys.exit()
+
+    # Desenho
+    screen.fill(GREEN)
+    pygame.draw.rect(screen, RED, player1)
+    pygame.draw.rect(screen, BLUE, player2)
+    pygame.draw.ellipse(screen, WHITE, ball)
+
+    # Placar
+    placar_texto = font.render(f"{nome1}: {score1} | {nome2}: {score2}", True, BLACK)
+    screen.blit(placar_texto, (WIDTH//2 - 150, 20))
+
+    pygame.display.flip()
+    clock.tick(60)
