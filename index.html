@@ -1,7 +1,7 @@
 import pygame
 import sys
-import json
 
+# Inicializa o Pygame
 pygame.init()
 
 # Configurações da tela
@@ -14,7 +14,6 @@ WHITE = (255, 255, 255)
 GREEN = (0, 200, 0)
 RED = (200, 0, 0)
 BLUE = (0, 0, 200)
-BLACK = (0, 0, 0)
 
 # Jogadores
 player_size = 40
@@ -32,40 +31,8 @@ gravity = 1
 p1_y_vel = 0
 p2_y_vel = 0
 
-# Placar
-score1 = 0
-score2 = 0
-max_goals = 15
-
-# Fontes
-font = pygame.font.SysFont(None, 40)
-
-# Ranking
-ranking_file = "ranking.json"
-
-def carregar_ranking():
-    try:
-        with open(ranking_file, "r") as f:
-            return json.load(f)
-    except:
-        return {}
-
-def salvar_ranking(ranking):
-    with open(ranking_file, "w") as f:
-        json.dump(ranking, f)
-
-# Login simples
-def login():
-    print("=== LOGIN ===")
-    nome = input("Digite seu nome: ")
-    senha = input("Digite sua senha: ")
-    return nome, senha
-
 # Loop principal
 clock = pygame.time.Clock()
-ranking = carregar_ranking()
-nome1, senha1 = login()
-nome2, senha2 = login()
 
 while True:
     for event in pygame.event.get():
@@ -83,7 +50,7 @@ while True:
     if keys[pygame.K_w] and player1.bottom >= HEIGHT:
         p1_y_vel = -jump_height
     if keys[pygame.K_s] and player1.colliderect(ball):
-        ball_speed[0] = -ball_speed[0]
+        ball_speed[0] = -ball_speed[0]  # chute
 
     # Controles Jogador 2
     if keys[pygame.K_LEFT]:
@@ -93,7 +60,7 @@ while True:
     if keys[pygame.K_UP] and player2.bottom >= HEIGHT:
         p2_y_vel = -jump_height
     if keys[pygame.K_k] and player2.colliderect(ball):
-        ball_speed[0] = -ball_speed[0]
+        ball_speed[0] = -ball_speed[0]  # chute
 
     # Física dos jogadores
     p1_y_vel += gravity
@@ -113,35 +80,16 @@ while True:
     ball.y += ball_speed[1]
 
     # Colisão com paredes
+    if ball.left <= 0 or ball.right >= WIDTH:
+        ball_speed[0] = -ball_speed[0]
     if ball.top <= 0 or ball.bottom >= HEIGHT:
         ball_speed[1] = -ball_speed[1]
-
-    # Gols
-    if ball.left <= 0:  # Gol jogador 2
-        score2 += 1
-        ball.center = (WIDTH//2, HEIGHT//2)
-    if ball.right >= WIDTH:  # Gol jogador 1
-        score1 += 1
-        ball.center = (WIDTH//2, HEIGHT//2)
-
-    # Fim de jogo
-    if score1 >= max_goals or score2 >= max_goals:
-        vencedor = nome1 if score1 > score2 else nome2
-        print(f"Fim de jogo! Vencedor: {vencedor}")
-        ranking[vencedor] = ranking.get(vencedor, 0) + 1
-        salvar_ranking(ranking)
-        pygame.quit()
-        sys.exit()
 
     # Desenho
     screen.fill(GREEN)
     pygame.draw.rect(screen, RED, player1)
     pygame.draw.rect(screen, BLUE, player2)
     pygame.draw.ellipse(screen, WHITE, ball)
-
-    # Placar
-    placar_texto = font.render(f"{nome1}: {score1} | {nome2}: {score2}", True, BLACK)
-    screen.blit(placar_texto, (WIDTH//2 - 150, 20))
 
     pygame.display.flip()
     clock.tick(60)
